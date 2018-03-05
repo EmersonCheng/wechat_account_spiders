@@ -23,6 +23,7 @@ import logging
 
 logging.basicConfig(level=logging.WARNING)
 settings_path = os.path.join(os.path.dirname(__file__), 'setting.json')
+
 # run py with argv
 # sys.argv = [__file__, '--start', '--non-headless']
 
@@ -231,6 +232,7 @@ def getArticleList(driver, account, is_get_one_day=False):
     # collect Article List
     driver.get(account_url)
     base = "https://" + urllib.parse.urlparse(account_url).hostname
+
     while len(driver.find_elements_by_class_name("weui_label")):
         driver.get_screenshot_as_file("verifycode.png")
         subprocess_path = os.path.join(os.path.dirname(__file__), 'picview')
@@ -276,7 +278,8 @@ def getArticleList(driver, account, is_get_one_day=False):
                 "weui_media_desc").text.strip()
             date_str = article.find_element_by_class_name(
                 "weui_media_extra_info").text.strip().replace(
-                    "年", '-').replace("月", '-').replace("日", '')
+                    "年", '-').replace("月", '-').replace("日", '').replace(
+                        '原创', '')
             tmp.datetime = datetime.datetime.strptime(date_str, '%Y-%m-%d')
             tmp.account = account
             one_day_article_list.append(tmp)
@@ -350,7 +353,7 @@ def downArticle(driver, article_object, path):
         f.write(str(soup.prettify()))
 
 
-def startDownload(is_headless_mode, is_disable_gpu):
+def startDownload(is_headless_mode, is_disable_gpu, download_all_article):
     processOutput("start download")
     path = getDownloadPath()
     processOutput("download path:", path)
@@ -367,15 +370,17 @@ def startDownload(is_headless_mode, is_disable_gpu):
     processOutput("open browser...")
     driver = webdriver.Chrome(chromedriver_path, chrome_options=options)
 
+    is_get_one_day = not download_all_article
     for index, account in enumerate(account_list):
         processOutput('================================================')
         processOutput("current accout:", account_list[index])
-        article_list = getArticleList(driver, account, is_get_one_day=True)
-        for index, article_object in enumerate(article_list[0]):
-            processOutput('------------------------------------------------')
-            progress = "%s/%s:" % (index + 1, len(article_list[0]))
-            processOutput(progress, article_object)
-            downArticle(driver, article_object, path)
+        article_lists = getArticleList(driver, account, is_get_one_day)
+        for article_list in article_lists:
+            for index, article_object in enumerate(article_list):
+                processOutput('----------------------------------------------')
+                progress = "%s/%s:" % (index + 1, len(article_list))
+                processOutput(progress, article_object)
+                downArticle(driver, article_object, path)
 
     processOutput('================================================')
     processOutput("close browser...")
@@ -389,6 +394,8 @@ def main():
         --start                     start download
         --non-headless              start broswer without headless mode
         --disable-gpu               start broswer disable gpu
+        --download-all-article      download all account articles
+                                    instead of download latest day
     configure:
         --download-path             show download path
         --set-download-path         set download path
@@ -407,7 +414,7 @@ def main():
     longopts = [
         "set-download-path=", "set-account=", "set-chromedriver-path=",
         "download-path", "account-list", "chromedriver-path", "help",
-        "non-headless", "disable-gpu", "start"
+        "non-headless", "disable-gpu", "download-all-article", "start"
     ]
     try:
         opts, argv = getopt.getopt(sys.argv[1:], "h", longopts)
@@ -438,15 +445,13 @@ def main():
                 setChromedriverPath(opt[1])
                 print("chromedriver-path:", opt[1])
         if ('--start', '') in opts:
-            is_headless_mode = True
-            is_disable_gpu = False
-            if ('--non-headless', '') in opts:
-                is_headless_mode = False
-            if ('--disable-gpu', '') in opts:
-                is_disable_gpu = True
+            is_headless_mode = not ('--non-headless', '') in opts
+            is_disable_gpu = ('--disable-gpu', '') in opts
+            download_all_article = ('--download-all-article', '') in opts
             startDownload(
                 is_headless_mode=is_headless_mode,
-                is_disable_gpu=is_disable_gpu)
+                is_disable_gpu=is_disable_gpu,
+                download_all_article=download_all_article)
 
 
 if __name__ == '__main__':
