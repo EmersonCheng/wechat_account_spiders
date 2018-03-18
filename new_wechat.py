@@ -5,12 +5,18 @@
 # 1.验证码图片查看器picview可使用PyQt或wxWidget编写
 # 2.检测代码可靠性，异常处理，兼容服务器或跨平台
 # 3.方法1改进，不使用bs4解析网页源码，手动更改源码
-# 4.SQLite存储信息，防止重复下载
+# done 4.SQLite存储信息，防止重复下载
+# done 5.284行abstract
+#       soup.find_all('div', class_='weui_msg_card_bd')[0].
+#       find_all(# 'div',class_='weui_media_box appmsg')[0].
+#       find_all(class_='weui_media_desc')[0].contents[0]
+#   fix by using driver.set_window_size(1366, 768)
 
 from selenium import webdriver
 from selenium.webdriver import Remote as WebDriver
 import urllib
 import bs4
+import sqlite3
 import progressbar
 import datetime
 import time
@@ -22,7 +28,8 @@ import subprocess
 import logging
 
 logging.basicConfig(level=logging.WARNING)
-settings_path = os.path.join(os.path.dirname(__file__), 'setting.json')
+SETTINGS_PATH = os.path.join(os.path.dirname(__file__), 'setting.json')
+DATABASE_NAME = 'database.db'
 
 # run py with argv
 # sys.argv = [__file__, '--start', '--non-headless']
@@ -124,7 +131,7 @@ def processOutput(*args, **kw):
 
 
 def checkFilename(str):
-    escape_character = ['\\', '/', ':', '*', '?', '"', '<', '>', '|']
+    escape_character = ['\\', '/', ':', '*', '?', '"', '<', '>', '|', ' ']
     for a in escape_character:
         if a in str:
             str = str.replace(a, '_')
@@ -132,9 +139,9 @@ def checkFilename(str):
 
 
 def getSettings():
-    if not os.path.exists(settings_path):
+    if not os.path.exists(SETTINGS_PATH):
         return dict()
-    with open(settings_path, 'r') as f:
+    with open(SETTINGS_PATH, 'r') as f:
         settings = json.load(f)
     return settings
 
@@ -142,7 +149,7 @@ def getSettings():
 def saveSettings(settings):
     if not isinstance(settings, dict):
         raise TypeError('settings must be a dict')
-    with open(settings_path, 'w') as f:
+    with open(SETTINGS_PATH, 'w') as f:
         json.dump(settings, f, indent='\t')
 
 
@@ -267,7 +274,7 @@ def getArticleList(driver, account, is_get_one_day=False):
                 "weui_media_title").text.strip()
             if len(article.find_elements_by_class_name("icon_original_tag")):
                 tmp.is_original = True
-                tmp.title = tmp.title[3:]
+                tmp.title = tmp.title.replace('原创 ', '')
             else:
                 tmp.is_original = False
             tmp.url = urllib.parse.urljoin(
@@ -294,9 +301,25 @@ def downArticle(driver, article_object, path):
     if not isinstance(article_object, Article):
         raise TypeError("article_object must be a Article object!")
 
-    date_dir_name = article_object.datetime.strftime('%Y-%m-%d')
+    datetime_str = article_object.datetime.strftime('%Y-%m-%d')
+    sql_path = os.path.join(getDownloadPath(), DATABASE_NAME)
+
+    connect = sqlite3.connect(sql_path)
+    cursor = connect.cursor()
+    c = cursor.execute('SELECT Title FROM {} WHERE Datetime == ?;'.format(
+        article_object.account), (datetime_str, ))
+    for row in c:
+        # print(row)
+        if row[0] == article_object.title:
+            processOutput("article exist")
+            cursor.close()
+            connect.close()
+            return
+    cursor.close()
+    connect.close()
+
     dir_name = checkFilename(article_object.title + "_files")
-    dirpath = os.path.join(path, article_object.account, date_dir_name,
+    dirpath = os.path.join(path, article_object.account, datetime_str,
                            dir_name)
     if not os.path.exists(dirpath):
         os.makedirs(dirpath)
@@ -314,7 +337,7 @@ def downArticle(driver, article_object, path):
     #     img_name = img_url.split('/')[-2]
     #     # img_element.screenshot_as_png  # only useful in Firefox
     #     file_name = os.path.join(path, article_object.account,
-    #                              date_dir_name, dir_name, img_name)
+    #                              datetime_str, dir_name, img_name)
     #     urllib.request.urlretrieve(img_url, file_name)
     #     tag = soup.find(attrs={"data-src": img_url})
     #     tag['src'] = "./"+dir_name+img_name
@@ -332,7 +355,8 @@ def downArticle(driver, article_object, path):
     for index, img_tag in enumerate(img_list):
         img_url = img_tag['data-src']
         img_name = img_url.split('/')[-2]
-        file_name = os.path.join(path, dir_name, img_name)
+        file_name = os.path.join(path, article_object.account, datetime_str,
+                                 dir_name, img_name)
         urllib.request.urlretrieve(img_url, file_name)
         img_tag['src'] = "./" + dir_name + '/' + img_name
         bar.update(index + 1)
@@ -342,15 +366,28 @@ def downArticle(driver, article_object, path):
     if 'src' in qr_code_tag.attrs:
         qr_code_url = qr_code_tag['src']
         qr_code_name = "qr_code"
-        file_name = os.path.join(path, dir_name, qr_code_name)
+        file_name = os.path.join(path, article_object.account, datetime_str,
+                                 dir_name, qr_code_name)
         urllib.request.urlretrieve('https://mp.weixin.qq.com' + qr_code_url,
                                    file_name)
         qr_code_tag['src'] = "./" + dir_name + '/' + qr_code_name
 
     htm_name = checkFilename(article_object.title)
-    htm_file = os.path.join(path, htm_name + '.htm')
+    htm_file = os.path.join(path, article_object.account, datetime_str,
+                            htm_name + '.htm')
     with open(htm_file, 'w', encoding='utf-8') as f:
         f.write(str(soup.prettify()))
+
+    htm_path = "./" + article_object.account + '/' \
+        + datetime_str + '/' + htm_name + '.htm'
+    data = (article_object.title, htm_path, datetime_str,
+            article_object.abstract, article_object.is_original)
+    connect = sqlite3.connect(sql_path)
+    connect.execute('''INSERT INTO {}
+        (Title,URL,Datetime,Abstract,Is_original)
+        VALUES (?, ?, ?, ?, ?);'''.format(article_object.account), data)
+    connect.commit()
+    connect.close()
 
 
 def startDownload(is_headless_mode, is_disable_gpu, download_all_article):
@@ -359,6 +396,24 @@ def startDownload(is_headless_mode, is_disable_gpu, download_all_article):
     processOutput("download path:", path)
     account_list = getAccountList()
     processOutput("accout list:", account_list)
+
+    # database
+    sql_path = os.path.join(getDownloadPath(), DATABASE_NAME)
+    connect = sqlite3.connect(sql_path)
+    for account in account_list:
+        result = connect.execute(
+            "select * from sqlite_master where type='table' and name=?;",
+            (account, ))
+        if not len(list(result)):
+            connect.execute('''CREATE TABLE {}
+                (ID         INTEGER PRIMARY KEY NOT NULL,
+                Title       TEXT    NOT NULL,
+                URL         TEXT    NOT NULL,
+                Datetime    TEXT    NOT NULL,
+                Abstract    TEXT,
+                Is_original BOOLEAN);'''.format(account))
+    connect.commit()
+    connect.close()
 
     # init webdriver
     chromedriver_path = getChromedriverPath()
@@ -369,23 +424,27 @@ def startDownload(is_headless_mode, is_disable_gpu, download_all_article):
         options.add_argument('-disable-gpu')  # for server
     processOutput("open browser...")
     driver = webdriver.Chrome(chromedriver_path, chrome_options=options)
+    driver.set_window_size(1366, 768)
 
-    is_get_one_day = not download_all_article
-    for index, account in enumerate(account_list):
+    try:
+        is_get_one_day = not download_all_article
+        for index, account in enumerate(account_list):
+            processOutput('================================================')
+            processOutput("current accout:", account_list[index])
+            article_lists = getArticleList(driver, account, is_get_one_day)
+            for article_list in article_lists:
+                for index, article_object in enumerate(article_list):
+                    processOutput('------------------------------------------')
+                    progress = "%s/%s:" % (index + 1, len(article_list))
+                    processOutput(progress, article_object)
+                    downArticle(driver, article_object, path)
+    except BaseException as e:
+        print(e)
+    finally:
         processOutput('================================================')
-        processOutput("current accout:", account_list[index])
-        article_lists = getArticleList(driver, account, is_get_one_day)
-        for article_list in article_lists:
-            for index, article_object in enumerate(article_list):
-                processOutput('----------------------------------------------')
-                progress = "%s/%s:" % (index + 1, len(article_list))
-                processOutput(progress, article_object)
-                downArticle(driver, article_object, path)
-
-    processOutput('================================================')
-    processOutput("close browser...")
-    driver.quit()
-    processOutput("done")
+        processOutput("close browser...")
+        driver.quit()
+        processOutput("done")
 
 
 def main():

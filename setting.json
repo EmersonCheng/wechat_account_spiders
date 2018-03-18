@@ -1,7 +1,9 @@
 {
 	"download_path": "D:\\Program_Project\\python\\wechat\\download",
 	"account_list": [
-		"midifan"
+		"midifan",
+		"python",
+		"\u7b14\u5427"
 	],
 	"chromedriver_path": "d:\\chrome\\Chrome\\chromedriver.exe"
 }
