@@ -306,21 +306,21 @@ def downArticle(driver, article_object, path):
         raise TypeError("article_object must be a Article object!")
 
     datetime_str = article_object.datetime.strftime('%Y-%m-%d')
-    # sql_path = os.path.join(getDownloadPath(), DATABASE_NAME)
+    sql_path = os.path.join(getDownloadPath(), DATABASE_NAME)
 
-    # connect = sqlite3.connect(sql_path)
-    # cursor = connect.cursor()
-    # c = cursor.execute('SELECT Title FROM {} WHERE Datetime == ?;'.format(
-    #     article_object.account), (datetime_str, ))
-    # for row in c:
-    #     # print(row)
-    #     if row[0] == article_object.title:
-    #         processOutput("article exist")
-    #         cursor.close()
-    #         connect.close()
-    #         return
-    # cursor.close()
-    # connect.close()
+    connect = sqlite3.connect(sql_path)
+    cursor = connect.cursor()
+    c = cursor.execute('SELECT Title FROM {} WHERE Datetime == ?;'.format(
+        article_object.account), (datetime_str, ))
+    for row in c:
+        # print(row)
+        if row[0] == article_object.title:
+            processOutput("article exist")
+            cursor.close()
+            connect.close()
+            return
+    cursor.close()
+    connect.close()
 
     dir_name = checkFilename(article_object.title + "_files")
     dirpath = os.path.join(path, article_object.account, datetime_str,
@@ -404,16 +404,16 @@ def downArticle(driver, article_object, path):
     with open(htm_file, 'w', encoding='utf-8') as f:
         f.write(str(soup.prettify()))
 
-    # htm_path = "./" + article_object.account + '/' \
-    #     + datetime_str + '/' + htm_name + '.htm'
-    # data = (article_object.title, htm_path, datetime_str,
-    #         article_object.abstract, article_object.is_original)
-    # connect = sqlite3.connect(sql_path)
-    # connect.execute('''INSERT INTO {}
-    #     (Title,URL,Datetime,Abstract,Is_original)
-    #     VALUES (?, ?, ?, ?, ?);'''.format(article_object.account), data)
-    # connect.commit()
-    # connect.close()
+    htm_path = "./" + article_object.account + '/' \
+        + datetime_str + '/' + htm_name + '.htm'
+    data = (article_object.title, htm_path, datetime_str,
+            article_object.abstract, article_object.is_original)
+    connect = sqlite3.connect(sql_path)
+    connect.execute('''INSERT INTO {}
+        (Title,URL,Datetime,Abstract,Is_original)
+        VALUES (?, ?, ?, ?, ?);'''.format(article_object.account), data)
+    connect.commit()
+    connect.close()
 
 
 def startDownload(is_headless_mode, is_disable_gpu, download_all_article):
