@@ -4,13 +4,17 @@
 # TODO:
 # 1.验证码图片查看器picview可使用PyQt或wxWidget编写
 # 2.检测代码可靠性，异常处理，兼容服务器或跨平台
-# 3.方法1改进，不使用bs4解析网页源码，手动更改源码
+# abort 3.方法1改进，不使用bs4解析网页源码，手动更改源码
 # done 4.SQLite存储信息，防止重复下载
 # done 5.284行abstract
 #       soup.find_all('div', class_='weui_msg_card_bd')[0].
-#       find_all(# 'div',class_='weui_media_box appmsg')[0].
+#       find_all('div',class_='weui_media_box appmsg')[0].
 #       find_all(class_='weui_media_desc')[0].contents[0]
 #   fix by using driver.set_window_size(1366, 768)
+# 6.重构，改用面向对象方式
+# 7.以纯解析的方式重新实现
+# 8.加入不离线图片
+# 9.编写qt离线查看器
 
 from selenium import webdriver
 from selenium.webdriver import Remote as WebDriver
@@ -302,21 +306,21 @@ def downArticle(driver, article_object, path):
         raise TypeError("article_object must be a Article object!")
 
     datetime_str = article_object.datetime.strftime('%Y-%m-%d')
-    sql_path = os.path.join(getDownloadPath(), DATABASE_NAME)
+    # sql_path = os.path.join(getDownloadPath(), DATABASE_NAME)
 
-    connect = sqlite3.connect(sql_path)
-    cursor = connect.cursor()
-    c = cursor.execute('SELECT Title FROM {} WHERE Datetime == ?;'.format(
-        article_object.account), (datetime_str, ))
-    for row in c:
-        # print(row)
-        if row[0] == article_object.title:
-            processOutput("article exist")
-            cursor.close()
-            connect.close()
-            return
-    cursor.close()
-    connect.close()
+    # connect = sqlite3.connect(sql_path)
+    # cursor = connect.cursor()
+    # c = cursor.execute('SELECT Title FROM {} WHERE Datetime == ?;'.format(
+    #     article_object.account), (datetime_str, ))
+    # for row in c:
+    #     # print(row)
+    #     if row[0] == article_object.title:
+    #         processOutput("article exist")
+    #         cursor.close()
+    #         connect.close()
+    #         return
+    # cursor.close()
+    # connect.close()
 
     dir_name = checkFilename(article_object.title + "_files")
     dirpath = os.path.join(path, article_object.account, datetime_str,
@@ -330,49 +334,69 @@ def downArticle(driver, article_object, path):
     time.sleep(delay_time)
     html = driver.page_source
     soup = bs4.BeautifulSoup(html, "lxml")
-    # method 1 by webdriver.find_elements_by_xpath() and BeautifulSoup.find()
-    # img_list = driver.find_elements_by_xpath('//img[@data-src]')
-    # for img_element in img_list:
-    #     img_url = img_element.get_attribute("data-src")
-    #     img_name = img_url.split('/')[-2]
-    #     # img_element.screenshot_as_png  # only useful in Firefox
-    #     file_name = os.path.join(path, article_object.account,
-    #                              datetime_str, dir_name, img_name)
-    #     urllib.request.urlretrieve(img_url, file_name)
-    #     tag = soup.find(attrs={"data-src": img_url})
-    #     tag['src'] = "./"+dir_name+img_name
 
-    # method 2 by BeautifulSoup.find_all()
-    img_list = soup.find_all('img', attrs={"data-src": True})
-    if len(img_list):
-        widgets = [
-            '#Process# download pictures: (',
-            progressbar.SimpleProgress(), ') ',
-            progressbar.Bar(),
-            progressbar.Percentage(), ' ',
-            progressbar.Timer()
-        ]
-        bar = progressbar.ProgressBar(max_value=len(img_list), widgets=widgets)
-        for index, img_tag in enumerate(img_list):
-            img_url = img_tag['data-src']
-            img_name = img_url.split('/')[-2]
-            file_name = os.path.join(path, article_object.account,
-                                     datetime_str, dir_name, img_name)
-            urllib.request.urlretrieve(img_url, file_name)
-            img_tag['src'] = "./" + dir_name + '/' + img_name
-            bar.update(index + 1)
-        bar.finish()
+    try:
+        is_rich_media = True
+        driver.find_element_by_class_name("rich_media")
+    except BaseException as e:
+        is_rich_media = False
+    if not is_rich_media:
+        processOutput("it's no rich media")
+        if soup.find(class_="video_info_mod video_overview_info_context") is None:
+            raise EOFError("this page can't download:", article_object.url)
+        soup.find('title').string = article_object.title
+        link = soup.find_all('link', attrs={'onerror': 'wx_loaderror(this)'})[0]
+        link['href'] = 'https:' + link['href']
+        lis = soup.find_all('li', class_='js_history_li recent_video tj_item')
+        for li in lis:
+            base = 'http://v.qq.com/x/search?opensearch=1&q='
+            title = li.find_all('strong', class_='recent_video_title')[0].text
+            li.wrap(soup.new_tag('a', href=base+title))
+    else:
+        # method 1 by webdriver.find_elements_by_xpath() and BeautifulSoup.find()
+        # img_list = driver.find_elements_by_xpath('//img[@data-src]')
+        # for img_element in img_list:
+        #     img_url = img_element.get_attribute("data-src")
+        #     img_name = img_url.split('/')[-2]
+        #     # img_element.screenshot_as_png  # only useful in Firefox
+        #     file_name = os.path.join(path, article_object.account,
+        #                              datetime_str, dir_name, img_name)
+        #     urllib.request.urlretrieve(img_url, file_name)
+        #     tag = soup.find(attrs={"data-src": img_url})
+        #     tag['src'] = "./"+dir_name+img_name
 
-    qr_code_tag = soup.find(id="js_pc_qr_code_img")
-    if qr_code_tag is not None:
-        if 'src' in qr_code_tag.attrs:
-            qr_code_url = qr_code_tag['src']
-            qr_code_name = "qr_code"
-            file_name = os.path.join(path, article_object.account,
-                                     datetime_str, dir_name, qr_code_name)
-            urllib.request.urlretrieve(
-                'https://mp.weixin.qq.com' + qr_code_url, file_name)
-            qr_code_tag['src'] = "./" + dir_name + '/' + qr_code_name
+        # method 2 by BeautifulSoup.find_all()
+        img_list = soup.find_all('img', attrs={"data-src": True})
+        if len(img_list):
+            widgets = [
+                '#Process# download pictures: (',
+                progressbar.SimpleProgress(), ') ',
+                progressbar.Bar(),
+                progressbar.Percentage(), ' ',
+                progressbar.Timer()
+            ]
+            bar = progressbar.ProgressBar(
+                max_value=len(img_list), widgets=widgets)
+            for index, img_tag in enumerate(img_list):
+                img_url = img_tag['data-src']
+                img_name = img_url.split('/')[-2]
+                file_name = os.path.join(path, article_object.account,
+                                         datetime_str, dir_name, img_name)
+                urllib.request.urlretrieve(img_url, file_name)
+                img_tag['src'] = "./" + dir_name + '/' + img_name
+                bar.update(index + 1)
+            bar.finish()
+
+        qr_code_tag = soup.find(id="js_pc_qr_code_img")
+        if qr_code_tag is not None:
+            if 'src' in qr_code_tag.attrs:
+                qr_code_url = qr_code_tag['src']
+                qr_code_name = "qr_code"
+                file_name = os.path.join(path, article_object.account,
+                                         datetime_str, dir_name, qr_code_name)
+                urllib.request.urlretrieve(
+                    'https://mp.weixin.qq.com' + qr_code_url, file_name)
+                qr_code_tag['src'] = "./" + dir_name + '/' + qr_code_name
 
     htm_name = checkFilename(article_object.title)
     htm_file = os.path.join(path, article_object.account, datetime_str,
@@ -380,16 +404,16 @@ def downArticle(driver, article_object, path):
     with open(htm_file, 'w', encoding='utf-8') as f:
         f.write(str(soup.prettify()))
 
-    htm_path = "./" + article_object.account + '/' \
-        + datetime_str + '/' + htm_name + '.htm'
-    data = (article_object.title, htm_path, datetime_str,
-            article_object.abstract, article_object.is_original)
-    connect = sqlite3.connect(sql_path)
-    connect.execute('''INSERT INTO {}
-        (Title,URL,Datetime,Abstract,Is_original)
-        VALUES (?, ?, ?, ?, ?);'''.format(article_object.account), data)
-    connect.commit()
-    connect.close()
+    # htm_path = "./" + article_object.account + '/' \
+    #     + datetime_str + '/' + htm_name + '.htm'
+    # data = (article_object.title, htm_path, datetime_str,
+    #         article_object.abstract, article_object.is_original)
+    # connect = sqlite3.connect(sql_path)
+    # connect.execute('''INSERT INTO {}
+    #     (Title,URL,Datetime,Abstract,Is_original)
+    #     VALUES (?, ?, ?, ?, ?);'''.format(article_object.account), data)
+    # connect.commit()
+    # connect.close()
 
 
 def startDownload(is_headless_mode, is_disable_gpu, download_all_article):
