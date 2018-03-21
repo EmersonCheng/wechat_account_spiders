@@ -344,33 +344,35 @@ def downArticle(driver, article_object, path):
 
     # method 2 by BeautifulSoup.find_all()
     img_list = soup.find_all('img', attrs={"data-src": True})
-    widgets = [
-        '#Process# download pictures: (',
-        progressbar.SimpleProgress(), ') ',
-        progressbar.Bar(),
-        progressbar.Percentage(), ' ',
-        progressbar.Timer()
-    ]
-    bar = progressbar.ProgressBar(max_value=len(img_list), widgets=widgets)
-    for index, img_tag in enumerate(img_list):
-        img_url = img_tag['data-src']
-        img_name = img_url.split('/')[-2]
-        file_name = os.path.join(path, article_object.account, datetime_str,
-                                 dir_name, img_name)
-        urllib.request.urlretrieve(img_url, file_name)
-        img_tag['src'] = "./" + dir_name + '/' + img_name
-        bar.update(index + 1)
-    bar.finish()
+    if len(img_list):
+        widgets = [
+            '#Process# download pictures: (',
+            progressbar.SimpleProgress(), ') ',
+            progressbar.Bar(),
+            progressbar.Percentage(), ' ',
+            progressbar.Timer()
+        ]
+        bar = progressbar.ProgressBar(max_value=len(img_list), widgets=widgets)
+        for index, img_tag in enumerate(img_list):
+            img_url = img_tag['data-src']
+            img_name = img_url.split('/')[-2]
+            file_name = os.path.join(path, article_object.account,
+                                     datetime_str, dir_name, img_name)
+            urllib.request.urlretrieve(img_url, file_name)
+            img_tag['src'] = "./" + dir_name + '/' + img_name
+            bar.update(index + 1)
+        bar.finish()
 
     qr_code_tag = soup.find(id="js_pc_qr_code_img")
-    if 'src' in qr_code_tag.attrs:
-        qr_code_url = qr_code_tag['src']
-        qr_code_name = "qr_code"
-        file_name = os.path.join(path, article_object.account, datetime_str,
-                                 dir_name, qr_code_name)
-        urllib.request.urlretrieve('https://mp.weixin.qq.com' + qr_code_url,
-                                   file_name)
-        qr_code_tag['src'] = "./" + dir_name + '/' + qr_code_name
+    if qr_code_tag is not None:
+        if 'src' in qr_code_tag.attrs:
+            qr_code_url = qr_code_tag['src']
+            qr_code_name = "qr_code"
+            file_name = os.path.join(path, article_object.account,
+                                     datetime_str, dir_name, qr_code_name)
+            urllib.request.urlretrieve(
+                'https://mp.weixin.qq.com' + qr_code_url, file_name)
+            qr_code_tag['src'] = "./" + dir_name + '/' + qr_code_name
 
     htm_name = checkFilename(article_object.title)
     htm_file = os.path.join(path, article_object.account, datetime_str,
