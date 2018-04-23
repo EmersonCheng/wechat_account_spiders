@@ -342,16 +342,20 @@ def downArticle(driver, article_object, path):
         is_rich_media = False
     if not is_rich_media:
         processOutput("it's no rich media")
-        if soup.find(class_="video_info_mod video_overview_info_context") is None:
+        if soup.find(
+                class_="video_info_mod video_overview_info_context") is None:
             raise EOFError("this page can't download:", article_object.url)
         soup.find('title').string = article_object.title
-        link = soup.find_all('link', attrs={'onerror': 'wx_loaderror(this)'})[0]
+        link = soup.find_all(
+            'link', attrs={
+                'onerror': 'wx_loaderror(this)'
+            })[0]
         link['href'] = 'https:' + link['href']
         lis = soup.find_all('li', class_='js_history_li recent_video tj_item')
         for li in lis:
             base = 'http://v.qq.com/x/search?opensearch=1&q='
             title = li.find_all('strong', class_='recent_video_title')[0].text
-            li.wrap(soup.new_tag('a', href=base+title))
+            li.wrap(soup.new_tag('a', href=base + title))
     else:
         # method 1 by webdriver.find_elements_by_xpath() and BeautifulSoup.find()
         # img_list = driver.find_elements_by_xpath('//img[@data-src]')
