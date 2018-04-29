@@ -36,7 +36,17 @@ SETTINGS_PATH = os.path.join(os.path.dirname(__file__), 'setting.json')
 DATABASE_NAME = 'database.db'
 
 # run py with argv
-# sys.argv = [__file__, '--start', '--non-headless']
+# sys.argv.append('--start')
+# sys.argv.append('--non-headless')
+# sys.argv.append('--disable-gpu')
+# sys.argv.append('--download-all-article')
+
+# sys.argv.append('--download-path')
+# sys.argv.append('--set-download-path={0}'.format())
+# sys.argv.append('--account-list')
+# sys.argv.append('--set-account={0}'.format("midifan"))
+# sys.argv.append('--chromedriver-path')
+# sys.argv.append('--set-chromedriver-path={0}'.format())
 
 
 class Article(object):
