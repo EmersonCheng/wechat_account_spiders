@@ -42,7 +42,7 @@ DATABASE_NAME = 'database.db'
 # sys.argv.append('--download-all-article')
 
 # sys.argv.append('--download-path')
-# sys.argv.append('--set-download-path={0}'.format())
+# sys.argv.append('--set-download-path={0}'.format("../"))
 # sys.argv.append('--account-list')
 # sys.argv.append('--set-account={0}'.format("midifan"))
 # sys.argv.append('--chromedriver-path')
@@ -320,7 +320,7 @@ def downArticle(driver, article_object, path):
 
     connect = sqlite3.connect(sql_path)
     cursor = connect.cursor()
-    c = cursor.execute('SELECT Title FROM {} WHERE Datetime == ?;'.format(
+    c = cursor.execute('SELECT Title FROM "{}" WHERE Datetime == ?;'.format(
         article_object.account), (datetime_str, ))
     for row in c:
         # print(row)
@@ -423,7 +423,7 @@ def downArticle(driver, article_object, path):
     data = (article_object.title, htm_path, datetime_str,
             article_object.abstract, article_object.is_original)
     connect = sqlite3.connect(sql_path)
-    connect.execute('''INSERT INTO {}
+    connect.execute('''INSERT INTO "{}"
         (Title,URL,Datetime,Abstract,Is_original)
         VALUES (?, ?, ?, ?, ?);'''.format(article_object.account), data)
     connect.commit()
@@ -445,7 +445,7 @@ def startDownload(is_headless_mode, is_disable_gpu, download_all_article):
             "select * from sqlite_master where type='table' and name=?;",
             (account, ))
         if not len(list(result)):
-            connect.execute('''CREATE TABLE {}
+            connect.execute('''CREATE TABLE "{}"
                 (ID         INTEGER PRIMARY KEY NOT NULL,
                 Title       TEXT    NOT NULL,
                 URL         TEXT    NOT NULL,
